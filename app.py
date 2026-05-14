@@ -1,10 +1,45 @@
-from flask import Flask, request, send_file, Response
-import json, io, datetime
+from flask import Flask, request, send_file, Response, jsonify
+import json, io, datetime, os
+import psycopg2
+from psycopg2.extras import RealDictCursor
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 
 app = Flask(__name__)
+
+# ── Database ──────────────────────────────────────────────────────────────────
+
+def get_conn():
+    return psycopg2.connect(os.environ['DATABASE_URL'], sslmode='require')
+
+def init_db():
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS entradas (
+                    id SERIAL PRIMARY KEY,
+                    fecha TEXT NOT NULL,
+                    nombre TEXT NOT NULL,
+                    razon_social TEXT,
+                    nombre_obra TEXT,
+                    telefono TEXT,
+                    ubicacion TEXT,
+                    tipos JSONB DEFAULT '[]',
+                    motivos JSONB DEFAULT '[]',
+                    otro_detalle TEXT,
+                    m3_concreto TEXT,
+                    no_venta_block TEXT,
+                    creado_en TIMESTAMP DEFAULT NOW()
+                )
+            """)
+        conn.commit()
+
+with app.app_context():
+    try:
+        init_db()
+    except Exception as e:
+        print(f"DB init error: {e}")
 
 # ── Excel generation ──────────────────────────────────────────────────────────
 
@@ -49,7 +84,6 @@ def write_entry(ws, r, e):
     ws.row_dimensions[r+4].height = 14
     ws.row_dimensions[r+5].height = 14
 
-    # ROW r: Fecha | Obra | Referencia | M³ venta
     _label(ws, f'A{r}', 'Fecha')
     ws.merge_cells(f'B{r}:D{r}')
     _value(ws, f'B{r}', e.get('fecha', ''))
@@ -62,7 +96,6 @@ def write_entry(ws, r, e):
     ws.merge_cells(f'K{r}:K{r+1}')
     _value(ws, f'K{r}', e.get('m3Concreto', ''), center=True, size=11)
 
-    # ROW r+1: Nombre | Auto construccion | Visita
     _label(ws, f'A{r+1}', 'Nombre:\nCliente o Prospecto')
     ws.merge_cells(f'B{r+1}:D{r+1}')
     _value(ws, f'B{r+1}', e.get('nombre', ''))
@@ -71,7 +104,6 @@ def write_entry(ws, r, e):
     _label(ws, f'G{r+1}', 'Visita')
     _x(ws,    f'H{r+1}', 'X' if 'Visita' in motivos else '')
 
-    # ROW r+2: Razon Social | Reventa | Red Social | No venta
     _label(ws, f'A{r+2}', 'Razon Social')
     ws.merge_cells(f'B{r+2}:D{r+2}')
     _value(ws, f'B{r+2}', e.get('razonSocial', ''))
@@ -84,7 +116,6 @@ def write_entry(ws, r, e):
     ws.merge_cells(f'K{r+2}:K{r+3}')
     _value(ws, f'K{r+2}', e.get('noVentaBlock', ''), center=True, size=11)
 
-    # ROW r+3: Nombre de la Obra | Evento | Otro
     _label(ws, f'A{r+3}', 'Nombre\nde la Obra')
     ws.merge_cells(f'B{r+3}:D{r+3}')
     _value(ws, f'B{r+3}', e.get('nombreObra', ''))
@@ -94,21 +125,15 @@ def write_entry(ws, r, e):
     _label(ws, f'G{r+3}', f'Otro: {otro}' if otro else 'Otro:', underline=True)
     _x(ws,    f'H{r+3}', 'X' if 'Otro' in motivos else '')
 
-    # ROW r+4: Telefono
     _label(ws, f'A{r+4}', 'Telefono')
     ws.merge_cells(f'B{r+4}:D{r+4}')
     _value(ws, f'B{r+4}', e.get('telefono', ''))
 
-    # ROW r+5: Ubicacion
     _label(ws, f'A{r+5}', 'Ubicación')
     ws.merge_cells(f'B{r+5}:D{r+5}')
     _value(ws, f'B{r+5}', e.get('ubicacion', ''))
 
-    # Borders
-    thin   = 'thin'
-    dashed = 'dashed'
-    COLS = 11
-
+    thin, dashed, COLS = 'thin', 'dashed', 11
     for ri in range(r, r+6):
         for ci in range(1, COLS+1):
             cell = ws.cell(row=ri, column=ci)
@@ -132,12 +157,10 @@ def write_entry(ws, r, e):
                 right  = _s(right)  if right  else b.right,
             )
 
-
 def build_excel(entries_by_date: dict) -> bytes:
     wb = Workbook()
     wb.remove(wb.active)
     col_widths = [14, 8, 8, 10, 13, 4, 11, 4, 8, 8, 10]
-
     for date_key in sorted(entries_by_date.keys()):
         entries = entries_by_date[date_key]
         try:
@@ -145,21 +168,17 @@ def build_excel(entries_by_date: dict) -> bytes:
             sheet_name = d.strftime('%d-%b')
         except Exception:
             sheet_name = date_key
-
         ws = wb.create_sheet(title=sheet_name[:31])
         ws.sheet_view.showGridLines = False
         for ci, w in enumerate(col_widths, 1):
             ws.column_dimensions[get_column_letter(ci)].width = w
-
         current_row = 1
         for entry in entries:
             write_entry(ws, current_row, entry)
             current_row += 7
-
     buf = io.BytesIO()
     wb.save(buf)
     return buf.getvalue()
-
 
 # ── Routes ────────────────────────────────────────────────────────────────────
 
@@ -169,10 +188,75 @@ HTML = open('index.html', encoding='utf-8').read()
 def index():
     return Response(HTML, mimetype='text/html')
 
+@app.route('/entrada', methods=['POST'])
+def save_entrada():
+    e = request.get_json()
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO entradas
+                  (fecha, nombre, razon_social, nombre_obra, telefono,
+                   ubicacion, tipos, motivos, otro_detalle, m3_concreto, no_venta_block)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                RETURNING id
+            """, (
+                e.get('fecha'), e.get('nombre'), e.get('razonSocial'),
+                e.get('nombreObra'), e.get('telefono'), e.get('ubicacion'),
+                json.dumps(e.get('tipos', [])), json.dumps(e.get('motivos', [])),
+                e.get('otroDetalle'), e.get('m3Concreto'), e.get('noVentaBlock')
+            ))
+            new_id = cur.fetchone()[0]
+        conn.commit()
+    return jsonify({'id': new_id}), 201
+
+@app.route('/entradas')
+def get_entradas():
+    fecha_desde = request.args.get('desde')
+    fecha_hasta = request.args.get('hasta')
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            if fecha_desde and fecha_hasta:
+                cur.execute("""
+                    SELECT * FROM entradas
+                    WHERE fecha BETWEEN %s AND %s
+                    ORDER BY fecha, id
+                """, (fecha_desde, fecha_hasta))
+            else:
+                cur.execute("SELECT * FROM entradas ORDER BY fecha DESC, id DESC LIMIT 200")
+            rows = cur.fetchall()
+    result = []
+    for r in rows:
+        result.append({
+            'id': r['id'],
+            'fecha': r['fecha'],
+            'nombre': r['nombre'],
+            'razonSocial': r['razon_social'] or '',
+            'nombreObra': r['nombre_obra'] or '',
+            'telefono': r['telefono'] or '',
+            'ubicacion': r['ubicacion'] or '',
+            'tipos': r['tipos'] if isinstance(r['tipos'], list) else json.loads(r['tipos'] or '[]'),
+            'motivos': r['motivos'] if isinstance(r['motivos'], list) else json.loads(r['motivos'] or '[]'),
+            'otroDetalle': r['otro_detalle'] or '',
+            'm3Concreto': r['m3_concreto'] or '',
+            'noVentaBlock': r['no_venta_block'] or '',
+        })
+    return jsonify(result)
+
+@app.route('/entrada/<int:entry_id>', methods=['DELETE'])
+def delete_entrada(entry_id):
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM entradas WHERE id = %s", (entry_id,))
+        conn.commit()
+    return jsonify({'ok': True})
+
 @app.route('/export', methods=['POST'])
 def export():
     data = request.get_json()
-    xlsx_bytes = build_excel(data['entries_by_date'])
+    entries_by_date = {}
+    for e in data.get('entries', []):
+        entries_by_date.setdefault(e['fecha'], []).append(e)
+    xlsx_bytes = build_excel(entries_by_date)
     return send_file(
         io.BytesIO(xlsx_bytes),
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',

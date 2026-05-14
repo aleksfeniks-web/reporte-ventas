@@ -33,6 +33,12 @@
   .two-col{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
   #otroText{margin-top:8px;display:none;}
   #otroText.visible{display:block;}
+
+  /* Filtro de fechas */
+  .filter-bar{display:flex;gap:8px;margin-bottom:14px;align-items:flex-end;}
+  .filter-bar .field{margin-bottom:0;flex:1;}
+  .btn-filter{padding:11px 14px;background:var(--dark);color:#fff;border:none;border-radius:9px;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;}
+
   .entry-card{background:#fff;border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:10px;position:relative;}
   .entry-name{font-weight:600;font-size:15px;margin-bottom:4px;}
   .entry-meta{font-size:12px;color:var(--muted);line-height:1.7;}
@@ -51,25 +57,29 @@
   .empty{text-align:center;padding:40px 20px;color:var(--muted);}
   .empty-icon{font-size:40px;margin-bottom:12px;}
   .empty-text{font-size:14px;line-height:1.5;}
-  .toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--dark);color:#fff;padding:10px 20px;border-radius:30px;font-size:13px;font-weight:500;opacity:0;transition:all .3s;pointer-events:none;white-space:nowrap;}
+  .toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--dark);color:#fff;padding:10px 20px;border-radius:30px;font-size:13px;font-weight:500;opacity:0;transition:all .3s;pointer-events:none;white-space:nowrap;z-index:200;}
   .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
   .count-badge{display:inline-flex;align-items:center;justify-content:center;background:var(--red);color:#fff;border-radius:20px;font-size:12px;font-weight:700;padding:2px 8px;margin-left:8px;}
   .hidden{display:none;}
   .spinner{display:inline-block;width:16px;height:16px;border:2px solid #fff6;border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:6px;}
   @keyframes spin{to{transform:rotate(360deg)}}
+  .loading-overlay{position:fixed;inset:0;background:rgba(255,255,255,.7);display:flex;align-items:center;justify-content:center;z-index:300;font-size:14px;font-weight:600;color:var(--dark);}
 </style>
 </head>
 <body>
+
 <header>
   <h1>Reporte de Venta y Prospección</h1>
   <p>Registro Diario de Campo</p>
 </header>
+
 <div class="container">
   <div class="tabs">
     <button class="tab active" onclick="showTab('form')">📝 Registro</button>
-    <button class="tab" onclick="showTab('list')">📋 Entradas <span class="count-badge" id="countBadge">0</span></button>
+    <button class="tab" onclick="showTab('list')">📋 Historial <span class="count-badge" id="countBadge">0</span></button>
   </div>
 
+  <!-- FORM TAB -->
   <div id="tabForm">
     <div class="card">
       <div class="card-title">📅 Información General</div>
@@ -82,6 +92,7 @@
         <div class="field"><label>Ubicación</label><input type="text" id="ubicacion" placeholder="Colonia / Zona"/></div>
       </div>
     </div>
+
     <div class="card">
       <div class="card-title">🏗️ Tipo de Actividad</div>
       <div class="check-grid">
@@ -91,6 +102,7 @@
         <div class="check-item" data-group="tipo" data-val="Evento" onclick="toggleCheck(this)"><div class="check-box"><svg width="12" height="10" viewBox="0 0 12 10"><path d="M1 5l3.5 3.5L11 1" stroke="white" stroke-width="2" fill="none" stroke-linecap="round"/></svg></div><span class="check-label">Evento</span></div>
       </div>
     </div>
+
     <div class="card">
       <div class="card-title">📌 Motivo de Contacto</div>
       <div class="check-grid">
@@ -101,6 +113,7 @@
       </div>
       <div id="otroText"><input type="text" id="otroDetalle" placeholder="Especificar..."/></div>
     </div>
+
     <div class="card">
       <div class="card-title">📦 Volúmenes</div>
       <div class="two-col">
@@ -110,9 +123,20 @@
     </div>
   </div>
 
+  <!-- LIST TAB -->
   <div id="tabList" class="hidden">
+
+    <div class="card" style="padding:14px 18px;">
+      <div class="card-title">🔍 Filtrar por Fecha</div>
+      <div class="filter-bar">
+        <div class="field"><label>Desde</label><input type="date" id="filtroDesde"/></div>
+        <div class="field"><label>Hasta</label><input type="date" id="filtroHasta"/></div>
+        <button class="btn-filter" onclick="loadEntradas()">Buscar</button>
+      </div>
+    </div>
+
     <div id="entriesList">
-      <div class="empty"><div class="empty-icon">📋</div><div class="empty-text">Sin entradas aún.<br>Registra clientes en la pestaña <strong>Registro</strong>.</div></div>
+      <div class="empty"><div class="empty-icon">📋</div><div class="empty-text">Cargando entradas...</div></div>
     </div>
   </div>
 </div>
@@ -121,87 +145,176 @@
   <button class="btn btn-add" onclick="addEntry()">+ Agregar</button>
   <button class="btn btn-export" id="exportBtn" onclick="exportExcel()" disabled>⬇ Exportar Excel</button>
 </div>
+
 <div class="toast" id="toast"></div>
 
 <script>
-let entries = [];
+let entries = [];   // entradas cargadas en historial
 document.getElementById('fecha').valueAsDate = new Date();
+
+// Default filter: current month
+const now = new Date();
+const y = now.getFullYear(), m = String(now.getMonth()+1).padStart(2,'0');
+document.getElementById('filtroDesde').value = `${y}-${m}-01`;
+document.getElementById('filtroHasta').value = `${y}-${m}-${String(new Date(y,now.getMonth()+1,0).getDate()).padStart(2,'0')}`;
 
 function showTab(tab) {
   document.getElementById('tabForm').classList.toggle('hidden', tab !== 'form');
   document.getElementById('tabList').classList.toggle('hidden', tab !== 'list');
-  document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', (i===0&&tab==='form')||(i===1&&tab==='list')));
-  if (tab==='list') renderList();
+  document.querySelectorAll('.tab').forEach((t,i) =>
+    t.classList.toggle('active', (i===0&&tab==='form')||(i===1&&tab==='list')));
+  if (tab === 'list') loadEntradas();
 }
+
 function toggleCheck(el){ el.classList.toggle('checked'); }
 function toggleOtro(el){ document.getElementById('otroText').classList.toggle('visible', el.classList.contains('checked')); }
 function getChecked(group){ return [...document.querySelectorAll(`.check-item[data-group="${group}"].checked`)].map(el=>el.dataset.val); }
 function fmtDate(v){ if(!v)return''; const d=new Date(v+'T12:00:00'); return d.toLocaleDateString('es-MX',{day:'2-digit',month:'numeric',year:'numeric'}); }
 
-function addEntry(){
-  const fecha=document.getElementById('fecha').value;
-  const nombre=document.getElementById('nombre').value.trim();
-  if(!fecha||!nombre){ showToast('⚠️ Fecha y Nombre son requeridos'); return; }
-  entries.push({ id:Date.now(), fecha, nombre,
-    razonSocial:document.getElementById('razonSocial').value.trim(),
-    nombreObra:document.getElementById('nombreObra').value.trim(),
-    telefono:document.getElementById('telefono').value.trim(),
-    ubicacion:document.getElementById('ubicacion').value.trim(),
-    tipos:getChecked('tipo'), motivos:getChecked('motivo'),
-    otroDetalle:document.getElementById('otroDetalle').value.trim(),
-    m3Concreto:document.getElementById('m3Concreto').value.trim(),
-    noVentaBlock:document.getElementById('noVentaBlock').value.trim(),
-  });
-  resetForm(); updateCount(); showToast('✅ Entrada agregada'); showTab('list');
+async function addEntry() {
+  const fecha  = document.getElementById('fecha').value;
+  const nombre = document.getElementById('nombre').value.trim();
+  if (!fecha || !nombre) { showToast('⚠️ Fecha y Nombre son requeridos'); return; }
+
+  const entry = {
+    fecha, nombre,
+    razonSocial:  document.getElementById('razonSocial').value.trim(),
+    nombreObra:   document.getElementById('nombreObra').value.trim(),
+    telefono:     document.getElementById('telefono').value.trim(),
+    ubicacion:    document.getElementById('ubicacion').value.trim(),
+    tipos:        getChecked('tipo'),
+    motivos:      getChecked('motivo'),
+    otroDetalle:  document.getElementById('otroDetalle').value.trim(),
+    m3Concreto:   document.getElementById('m3Concreto').value.trim(),
+    noVentaBlock: document.getElementById('noVentaBlock').value.trim(),
+  };
+
+  const btn = document.querySelector('.btn-add');
+  btn.innerHTML = '<span class="spinner"></span>Guardando...';
+  btn.disabled = true;
+
+  try {
+    const res = await fetch('/entrada', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(entry)
+    });
+    if (!res.ok) throw new Error();
+    resetForm();
+    showToast('✅ Guardado en base de datos');
+    showTab('list');
+  } catch {
+    showToast('❌ Error al guardar');
+  } finally {
+    btn.innerHTML = '+ Agregar';
+    btn.disabled = false;
+  }
 }
-function resetForm(){
-  ['nombre','razonSocial','nombreObra','telefono','ubicacion','m3Concreto','noVentaBlock','otroDetalle'].forEach(id=>document.getElementById(id).value='');
-  document.querySelectorAll('.check-item').forEach(el=>el.classList.remove('checked'));
+
+function resetForm() {
+  ['nombre','razonSocial','nombreObra','telefono','ubicacion','m3Concreto','noVentaBlock','otroDetalle']
+    .forEach(id => document.getElementById(id).value = '');
+  document.querySelectorAll('.check-item').forEach(el => el.classList.remove('checked'));
   document.getElementById('otroText').classList.remove('visible');
 }
-function deleteEntry(id){ entries=entries.filter(e=>e.id!==id); updateCount(); renderList(); }
-function updateCount(){ document.getElementById('countBadge').textContent=entries.length; document.getElementById('exportBtn').disabled=entries.length===0; }
-function renderList(){
-  const c=document.getElementById('entriesList');
-  if(!entries.length){ c.innerHTML='<div class="empty"><div class="empty-icon">📋</div><div class="empty-text">Sin entradas aún.</div></div>'; return; }
-  c.innerHTML=entries.map(e=>`
+
+async function loadEntradas() {
+  const desde = document.getElementById('filtroDesde').value;
+  const hasta = document.getElementById('filtroHasta').value;
+  document.getElementById('entriesList').innerHTML =
+    '<div class="empty"><div class="empty-icon">⏳</div><div class="empty-text">Cargando...</div></div>';
+
+  try {
+    let url = '/entradas';
+    if (desde && hasta) url += `?desde=${desde}&hasta=${hasta}`;
+    const res = await fetch(url);
+    entries = await res.json();
+    updateCount();
+    renderList();
+  } catch {
+    document.getElementById('entriesList').innerHTML =
+      '<div class="empty"><div class="empty-icon">❌</div><div class="empty-text">Error al cargar entradas.</div></div>';
+  }
+}
+
+async function deleteEntry(id) {
+  if (!confirm('¿Eliminar esta entrada?')) return;
+  try {
+    await fetch(`/entrada/${id}`, {method: 'DELETE'});
+    entries = entries.filter(e => e.id !== id);
+    updateCount();
+    renderList();
+    showToast('🗑️ Entrada eliminada');
+  } catch {
+    showToast('❌ Error al eliminar');
+  }
+}
+
+function updateCount() {
+  document.getElementById('countBadge').textContent = entries.length;
+  document.getElementById('exportBtn').disabled = entries.length === 0;
+}
+
+function renderList() {
+  const c = document.getElementById('entriesList');
+  if (!entries.length) {
+    c.innerHTML = '<div class="empty"><div class="empty-icon">📋</div><div class="empty-text">Sin entradas en este período.</div></div>';
+    return;
+  }
+  c.innerHTML = entries.map(e => `
     <div class="entry-card">
       <button class="entry-delete" onclick="deleteEntry(${e.id})">✕</button>
       <div class="entry-name">${e.nombre}</div>
-      <div class="entry-meta">📅 ${fmtDate(e.fecha)}${e.razonSocial?'<br>🏢 '+e.razonSocial:''}${e.nombreObra?' · 🏗️ '+e.nombreObra:''}${e.telefono?'<br>📞 '+e.telefono:''}${e.ubicacion?' · 📍 '+e.ubicacion:''}</div>
+      <div class="entry-meta">
+        📅 ${fmtDate(e.fecha)}
+        ${e.razonSocial ? '<br>🏢 '+e.razonSocial : ''}
+        ${e.nombreObra  ? ' · 🏗️ '+e.nombreObra  : ''}
+        ${e.telefono    ? '<br>📞 '+e.telefono    : ''}
+        ${e.ubicacion   ? ' · 📍 '+e.ubicacion   : ''}
+      </div>
       <div class="entry-tags">
         ${e.tipos.map(t=>`<span class="tag tag-tipo">${t}</span>`).join('')}
         ${e.motivos.map(m=>`<span class="tag tag-motivo">${m==='Otro'&&e.otroDetalle?e.otroDetalle:m}</span>`).join('')}
-        ${e.m3Concreto?`<span class="tag tag-vol">🪨 ${e.m3Concreto}</span>`:''}
-        ${e.noVentaBlock?`<span class="tag tag-vol">🧱 ${e.noVentaBlock}</span>`:''}
+        ${e.m3Concreto   ? `<span class="tag tag-vol">🪨 ${e.m3Concreto}</span>`   : ''}
+        ${e.noVentaBlock ? `<span class="tag tag-vol">🧱 ${e.noVentaBlock}</span>` : ''}
       </div>
     </div>`).join('');
 }
-function showToast(msg){ const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2500); }
 
-async function exportExcel(){
-  const btn=document.getElementById('exportBtn');
-  btn.innerHTML='<span class="spinner"></span>Generando...';
-  btn.disabled=true;
-  const byDate={};
-  entries.forEach(e=>{ if(!byDate[e.fecha]) byDate[e.fecha]=[]; byDate[e.fecha].push(e); });
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+async function exportExcel() {
+  if (!entries.length) return;
+  const btn = document.getElementById('exportBtn');
+  btn.innerHTML = '<span class="spinner"></span>Generando...';
+  btn.disabled = true;
   try {
-    const res=await fetch('/export',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({entries_by_date:byDate})});
-    if(!res.ok) throw new Error();
-    const blob=await res.blob();
-    const url=URL.createObjectURL(blob);
-    const a=document.createElement('a');
-    a.href=url;
-    const today=new Date().toLocaleDateString('es-MX',{day:'2-digit',month:'2-digit',year:'numeric'}).replace(/\//g,'-');
-    a.download=`REPORTE_VENTAS_${today}.xlsx`;
+    const res = await fetch('/export', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({entries})
+    });
+    if (!res.ok) throw new Error();
+    const blob = await res.blob();
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url;
+    const desde = document.getElementById('filtroDesde').value.replace(/-/g,'');
+    const hasta = document.getElementById('filtroHasta').value.replace(/-/g,'');
+    a.download = `REPORTE_VENTAS_${desde}_${hasta}.xlsx`;
     a.click();
     URL.revokeObjectURL(url);
     showToast('📥 Excel descargado');
-  } catch(err){
+  } catch {
     showToast('❌ Error al generar Excel');
   } finally {
-    btn.innerHTML='⬇ Exportar Excel';
-    btn.disabled=entries.length===0;
+    btn.innerHTML = '⬇ Exportar Excel';
+    btn.disabled = entries.length === 0;
   }
 }
 </script>
