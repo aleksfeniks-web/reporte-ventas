@@ -33,6 +33,9 @@ def init_db():
                     creado_en TIMESTAMP DEFAULT NOW()
                 )
             """)
+            cur.execute("ALTER TABLE entradas ADD COLUMN IF NOT EXISTS importe NUMERIC DEFAULT 0;")
+            cur.execute("ALTER TABLE entradas ADD COLUMN IF NOT EXISTS descuento NUMERIC DEFAULT 0;")
+            cur.execute("ALTER TABLE entradas ADD COLUMN IF NOT EXISTS comision NUMERIC DEFAULT 0;")
         conn.commit()
 
 with app.app_context():
@@ -129,9 +132,27 @@ def write_entry(ws, r, e):
     ws.merge_cells(f'B{r+4}:D{r+4}')
     _value(ws, f'B{r+4}', e.get('telefono', ''))
 
+    # Sales metrics
+    importe = float(e.get('importe') or 0)
+    descuento = float(e.get('descuento') or 0)
+    comision = float(e.get('comision') or 0)
+    venta_neta = importe * (1 - descuento / 100.0)
+
+    _label(ws, f'E{r+4}', 'Importe')
+    _value(ws, f'G{r+4}', f"${importe:,.2f}")
+    ws.merge_cells(f'I{r+4}:J{r+4}')
+    _label(ws, f'I{r+4}', 'Descuento')
+    _value(ws, f'K{r+4}', f"{descuento:.1f}%", center=True)
+
     _label(ws, f'A{r+5}', 'Ubicación')
     ws.merge_cells(f'B{r+5}:D{r+5}')
     _value(ws, f'B{r+5}', e.get('ubicacion', ''))
+
+    _label(ws, f'E{r+5}', 'Comisión')
+    _value(ws, f'G{r+5}', f"${comision:,.2f}")
+    ws.merge_cells(f'I{r+5}:J{r+5}')
+    _label(ws, f'I{r+5}', 'Venta Neta')
+    _value(ws, f'K{r+5}', f"${venta_neta:,.2f}", center=True)
 
     thin, dashed, COLS = 'thin', 'dashed', 11
     for ri in range(r, r+6):
@@ -191,19 +212,37 @@ def index():
 @app.route('/entrada', methods=['POST'])
 def save_entrada():
     e = request.get_json()
+    importe = float(e.get('importe') or 0)
+    descuento = float(e.get('descuento') or 0)
+    
+    # Calculate commission based on discount percentage
+    if 0 <= descuento <= 5:
+        tasa_comision = 0.03
+    elif 5 < descuento <= 10:
+        tasa_comision = 0.025
+    elif 10 < descuento <= 15:
+        tasa_comision = 0.015
+    else:
+        tasa_comision = 0.0
+        
+    venta_total = importe * (1 - descuento / 100.0)
+    comision = venta_total * tasa_comision
+
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute("""
                 INSERT INTO entradas
                   (fecha, nombre, razon_social, nombre_obra, telefono,
-                   ubicacion, tipos, motivos, otro_detalle, m3_concreto, no_venta_block)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                   ubicacion, tipos, motivos, otro_detalle, m3_concreto, no_venta_block,
+                   importe, descuento, comision)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                 RETURNING id
             """, (
                 e.get('fecha'), e.get('nombre'), e.get('razonSocial'),
                 e.get('nombreObra'), e.get('telefono'), e.get('ubicacion'),
                 json.dumps(e.get('tipos', [])), json.dumps(e.get('motivos', [])),
-                e.get('otroDetalle'), e.get('m3Concreto'), e.get('noVentaBlock')
+                e.get('otroDetalle'), e.get('m3Concreto'), e.get('noVentaBlock'),
+                importe, descuento, comision
             ))
             new_id = cur.fetchone()[0]
         conn.commit()
@@ -239,6 +278,9 @@ def get_entradas():
             'otroDetalle': r['otro_detalle'] or '',
             'm3Concreto': r['m3_concreto'] or '',
             'noVentaBlock': r['no_venta_block'] or '',
+            'importe': float(r['importe'] or 0) if 'importe' in r and r['importe'] is not None else 0.0,
+            'descuento': float(r['descuento'] or 0) if 'descuento' in r and r['descuento'] is not None else 0.0,
+            'comision': float(r['comision'] or 0) if 'comision' in r and r['comision'] is not None else 0.0,
         })
     return jsonify(result)
 

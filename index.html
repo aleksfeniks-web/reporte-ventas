@@ -77,6 +77,7 @@
   <div class="tabs">
     <button class="tab active" onclick="showTab('form')">📝 Registro</button>
     <button class="tab" onclick="showTab('list')">📋 Historial <span class="count-badge" id="countBadge">0</span></button>
+    <button class="tab" onclick="showTab('dashboard')">📊 Dashboard</button>
   </div>
 
   <!-- FORM TAB -->
@@ -121,6 +122,34 @@
         <div class="field"><label>No Venta Block o Potenciales</label><input type="text" id="noVentaBlock" placeholder="Ej: 1500"/></div>
       </div>
     </div>
+
+    <div class="card">
+      <div class="card-title">💰 Datos de la Venta</div>
+      <div class="two-col">
+        <div class="field">
+          <label>Importe de Cotización ($)</label>
+          <input type="number" id="importe" step="0.01" min="0" placeholder="0.00" oninput="calcularComision()"/>
+        </div>
+        <div class="field">
+          <label>Descuento Aplicado (%)</label>
+          <input type="number" id="descuento" min="0" max="15" step="0.1" value="0" placeholder="0 - 15%" oninput="calcularComision()"/>
+        </div>
+      </div>
+      <div class="commission-box" style="margin-top: 15px; padding: 12px; background: var(--surface); border-radius: 9px; border: 1.5px solid var(--border);">
+        <div style="display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 13px;">
+          <span style="font-weight: 600; color: var(--muted);">Venta Neta:</span>
+          <span id="lblVentaNeta" style="font-weight: 700; color: var(--dark);">$0.00</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 13px;">
+          <span style="font-weight: 600; color: var(--muted);">Tasa de Comisión:</span>
+          <span id="lblTasaComision" style="font-weight: 700; color: var(--red);">3.0%</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; font-size: 14px;">
+          <span style="font-weight: 600; color: var(--muted);">Comisión Estimada:</span>
+          <span id="lblComision" style="font-weight: 700; color: #1a7a1a;">$0.00</span>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- LIST TAB -->
@@ -137,6 +166,58 @@
 
     <div id="entriesList">
       <div class="empty"><div class="empty-icon">📋</div><div class="empty-text">Cargando entradas...</div></div>
+    </div>
+  </div>
+
+  <!-- DASHBOARD TAB -->
+  <div id="tabDashboard" class="hidden">
+    <div class="card" style="padding:14px 18px;">
+      <div class="card-title">📅 Seleccionar Mes</div>
+      <div style="display:flex; gap:10px; align-items:center;">
+        <input type="month" id="dashboardMes" onchange="loadDashboardData()" style="flex:1; padding:11px 13px; border:1.5px solid var(--border); border-radius:9px; font-family:inherit; font-size:15px; background:var(--surface); color:var(--dark);"/>
+      </div>
+    </div>
+
+    <!-- Summary Stats Grid -->
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:14px;">
+      <div class="card" style="margin-bottom:0; padding:14px; display:flex; flex-direction:column; justify-content:center;">
+        <span style="font-size:11px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:.5px;">Ventas Totales</span>
+        <span id="dashTotalVentas" style="font-size:20px; font-weight:700; color:var(--dark); margin-top:5px;">$0.00</span>
+        <span id="dashVentasCount" style="font-size:10px; color:var(--muted); margin-top:2px;">0 cotizaciones</span>
+      </div>
+      <div class="card" style="margin-bottom:0; padding:14px; display:flex; flex-direction:column; justify-content:center;">
+        <span style="font-size:11px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:.5px;">Comisión Total</span>
+        <span id="dashTotalComision" style="font-size:20px; font-weight:700; color:#1a7a1a; margin-top:5px;">$0.00</span>
+        <span id="dashPromedioComision" style="font-size:10px; color:var(--muted); margin-top:2px;">Tasa prom: 0.0%</span>
+      </div>
+    </div>
+
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:14px;">
+      <div class="card" style="margin-bottom:0; padding:14px; display:flex; flex-direction:column; justify-content:center;">
+        <span style="font-size:11px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:.5px;">Importe Bruto</span>
+        <span id="dashImporteBruto" style="font-size:18px; font-weight:700; color:var(--dark); margin-top:5px;">$0.00</span>
+      </div>
+      <div class="card" style="margin-bottom:0; padding:14px; display:flex; flex-direction:column; justify-content:center;">
+        <span style="font-size:11px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:.5px;">Total Descuentos</span>
+        <span id="dashTotalDescuentos" style="font-size:18px; font-weight:700; color:var(--red); margin-top:5px;">$0.00</span>
+        <span id="dashPromedioDescuento" style="font-size:10px; color:var(--muted); margin-top:2px;">Promedio: 0.0%</span>
+      </div>
+    </div>
+
+    <!-- Charts / Breakdowns -->
+    <div class="card">
+      <div class="card-title">📊 Resumen de Actividad</div>
+      <div id="dashActivityBreakdown" style="display:flex; flex-direction:column; gap:10px;">
+        <div style="font-size: 13px; color: var(--muted); text-align: center; padding: 10px;">Cargando...</div>
+      </div>
+    </div>
+
+    <!-- Top Clients -->
+    <div class="card">
+      <div class="card-title">🏆 Top Clientes del Mes</div>
+      <div id="dashTopClients" style="display:flex; flex-direction:column; gap:10px;">
+        <div style="font-size: 13px; color: var(--muted); text-align: center; padding: 10px;">Cargando...</div>
+      </div>
     </div>
   </div>
 </div>
@@ -158,18 +239,63 @@ const y = now.getFullYear(), m = String(now.getMonth()+1).padStart(2,'0');
 document.getElementById('filtroDesde').value = `${y}-${m}-01`;
 document.getElementById('filtroHasta').value = `${y}-${m}-${String(new Date(y,now.getMonth()+1,0).getDate()).padStart(2,'0')}`;
 
+// Initialize values on load
+setTimeout(() => {
+  const dashMonthInput = document.getElementById('dashboardMes');
+  if (dashMonthInput) {
+    dashMonthInput.value = `${y}-${m}`;
+  }
+  calcularComision();
+}, 100);
+
 function showTab(tab) {
   document.getElementById('tabForm').classList.toggle('hidden', tab !== 'form');
   document.getElementById('tabList').classList.toggle('hidden', tab !== 'list');
-  document.querySelectorAll('.tab').forEach((t,i) =>
-    t.classList.toggle('active', (i===0&&tab==='form')||(i===1&&tab==='list')));
+  document.getElementById('tabDashboard').classList.toggle('hidden', tab !== 'dashboard');
+  
+  document.querySelectorAll('.tab').forEach((t,i) => {
+    const isActive = (i===0&&tab==='form')||(i===1&&tab==='list')||(i===2&&tab==='dashboard');
+    t.classList.toggle('active', isActive);
+  });
+  
   if (tab === 'list') loadEntradas();
+  if (tab === 'dashboard') loadDashboardData();
 }
 
 function toggleCheck(el){ el.classList.toggle('checked'); }
 function toggleOtro(el){ document.getElementById('otroText').classList.toggle('visible', el.classList.contains('checked')); }
 function getChecked(group){ return [...document.querySelectorAll(`.check-item[data-group="${group}"].checked`)].map(el=>el.dataset.val); }
 function fmtDate(v){ if(!v)return''; const d=new Date(v+'T12:00:00'); return d.toLocaleDateString('es-MX',{day:'2-digit',month:'numeric',year:'numeric'}); }
+
+function calcularComision() {
+  const importeVal = parseFloat(document.getElementById('importe').value) || 0;
+  const descuentoInput = document.getElementById('descuento');
+  let descuentoVal = parseFloat(descuentoInput.value) || 0;
+  
+  if (descuentoVal < 0) {
+    descuentoVal = 0;
+    descuentoInput.value = 0;
+  } else if (descuentoVal > 15) {
+    descuentoVal = 15;
+    descuentoInput.value = 15;
+  }
+  
+  let tasa = 0;
+  if (descuentoVal >= 0 && descuentoVal <= 5) {
+    tasa = 3.0;
+  } else if (descuentoVal > 5 && descuentoVal <= 10) {
+    tasa = 2.5;
+  } else if (descuentoVal > 10 && descuentoVal <= 15) {
+    tasa = 1.5;
+  }
+  
+  const ventaNeta = importeVal * (1 - descuentoVal / 100.0);
+  const comision = ventaNeta * (tasa / 100.0);
+  
+  document.getElementById('lblVentaNeta').textContent = `$${ventaNeta.toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+  document.getElementById('lblTasaComision').textContent = `${tasa.toFixed(1)}%`;
+  document.getElementById('lblComision').textContent = `$${comision.toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+}
 
 async function addEntry() {
   const fecha  = document.getElementById('fecha').value;
@@ -187,6 +313,8 @@ async function addEntry() {
     otroDetalle:  document.getElementById('otroDetalle').value.trim(),
     m3Concreto:   document.getElementById('m3Concreto').value.trim(),
     noVentaBlock: document.getElementById('noVentaBlock').value.trim(),
+    importe:      parseFloat(document.getElementById('importe').value) || 0,
+    descuento:    parseFloat(document.getElementById('descuento').value) || 0,
   };
 
   const btn = document.querySelector('.btn-add');
@@ -212,10 +340,17 @@ async function addEntry() {
 }
 
 function resetForm() {
-  ['nombre','razonSocial','nombreObra','telefono','ubicacion','m3Concreto','noVentaBlock','otroDetalle']
-    .forEach(id => document.getElementById(id).value = '');
+  ['nombre','razonSocial','nombreObra','telefono','ubicacion','m3Concreto','noVentaBlock','otroDetalle','importe','descuento']
+    .forEach(id => {
+      const el = document.getElementById(id);
+      if (el) {
+        if (id === 'descuento') el.value = '0';
+        else el.value = '';
+      }
+    });
   document.querySelectorAll('.check-item').forEach(el => el.classList.remove('checked'));
   document.getElementById('otroText').classList.remove('visible');
+  calcularComision();
 }
 
 async function loadEntradas() {
@@ -261,24 +396,37 @@ function renderList() {
     c.innerHTML = '<div class="empty"><div class="empty-icon">📋</div><div class="empty-text">Sin entradas en este período.</div></div>';
     return;
   }
-  c.innerHTML = entries.map(e => `
-    <div class="entry-card">
-      <button class="entry-delete" onclick="deleteEntry(${e.id})">✕</button>
-      <div class="entry-name">${e.nombre}</div>
-      <div class="entry-meta">
-        📅 ${fmtDate(e.fecha)}
-        ${e.razonSocial ? '<br>🏢 '+e.razonSocial : ''}
-        ${e.nombreObra  ? ' · 🏗️ '+e.nombreObra  : ''}
-        ${e.telefono    ? '<br>📞 '+e.telefono    : ''}
-        ${e.ubicacion   ? ' · 📍 '+e.ubicacion   : ''}
-      </div>
-      <div class="entry-tags">
-        ${e.tipos.map(t=>`<span class="tag tag-tipo">${t}</span>`).join('')}
-        ${e.motivos.map(m=>`<span class="tag tag-motivo">${m==='Otro'&&e.otroDetalle?e.otroDetalle:m}</span>`).join('')}
-        ${e.m3Concreto   ? `<span class="tag tag-vol">🪨 ${e.m3Concreto}</span>`   : ''}
-        ${e.noVentaBlock ? `<span class="tag tag-vol">🧱 ${e.noVentaBlock}</span>` : ''}
-      </div>
-    </div>`).join('');
+  c.innerHTML = entries.map(e => {
+    const imp = parseFloat(e.importe) || 0;
+    const desc = parseFloat(e.descuento) || 0;
+    const com = parseFloat(e.comision) || 0;
+    const ventaNeta = imp * (1 - desc / 100.0);
+    
+    return `
+      <div class="entry-card">
+        <button class="entry-delete" onclick="deleteEntry(${e.id})">✕</button>
+        <div class="entry-name">${e.nombre}</div>
+        <div class="entry-meta">
+          📅 ${fmtDate(e.fecha)}
+          ${e.razonSocial ? '<br>🏢 '+e.razonSocial : ''}
+          ${e.nombreObra  ? ' · 🏗️ '+e.nombreObra  : ''}
+          ${e.telefono    ? '<br>📞 '+e.telefono    : ''}
+          ${e.ubicacion   ? ' · 📍 '+e.ubicacion   : ''}
+          ${imp > 0 ? `<br><div style="margin-top: 6px; padding: 6px 8px; background: var(--surface); border-radius: 6px; display: inline-block; font-size: 11.5px; border: 1px solid var(--border);">
+            <b>Importe:</b> $${imp.toLocaleString('es-MX', {minimumFractionDigits:2})} · 
+            <b>Desc:</b> ${desc}% ($${(imp - ventaNeta).toLocaleString('es-MX', {minimumFractionDigits:2})})<br>
+            <b>Neto:</b> $${ventaNeta.toLocaleString('es-MX', {minimumFractionDigits:2})} · 
+            <b>Comisión:</b> <span style="color:#1a7a1a; font-weight:bold;">$${com.toLocaleString('es-MX', {minimumFractionDigits:2})}</span>
+          </div>` : ''}
+        </div>
+        <div class="entry-tags">
+          ${e.tipos.map(t=>`<span class="tag tag-tipo">${t}</span>`).join('')}
+          ${e.motivos.map(m=>`<span class="tag tag-motivo">${m==='Otro'&&e.otroDetalle?e.otroDetalle:m}</span>`).join('')}
+          ${e.m3Concreto   ? `<span class="tag tag-vol">🪨 ${e.m3Concreto}</span>`   : ''}
+          ${e.noVentaBlock ? `<span class="tag tag-vol">🧱 ${e.noVentaBlock}</span>` : ''}
+        </div>
+      </div>`;
+  }).join('');
 }
 
 function showToast(msg) {
@@ -286,6 +434,123 @@ function showToast(msg) {
   t.textContent = msg;
   t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+async function loadDashboardData() {
+  const monthInput = document.getElementById('dashboardMes').value;
+  if (!monthInput) return;
+  
+  const [year, month] = monthInput.split('-');
+  const lastDay = new Date(year, month, 0).getDate();
+  const desde = `${year}-${month}-01`;
+  const hasta = `${year}-${month}-${String(lastDay).padStart(2, '0')}`;
+  
+  try {
+    const res = await fetch(`/entradas?desde=${desde}&hasta=${hasta}`);
+    const monthEntries = await res.json();
+    
+    let totalBruto = 0;
+    let totalNeta = 0;
+    let totalComision = 0;
+    let totalDescuentoMonto = 0;
+    let countConImporte = 0;
+    let sumaDescuentosPct = 0;
+    
+    const activityCount = {};
+    const clientSales = {};
+    
+    monthEntries.forEach(e => {
+      const imp = parseFloat(e.importe) || 0;
+      const descPct = parseFloat(e.descuento) || 0;
+      const com = parseFloat(e.comision) || 0;
+      
+      const descMonto = imp * (descPct / 100.0);
+      const neta = imp - descMonto;
+      
+      totalBruto += imp;
+      totalNeta += neta;
+      totalComision += com;
+      totalDescuentoMonto += descMonto;
+      
+      if (imp > 0) {
+        countConImporte++;
+        sumaDescuentosPct += descPct;
+      }
+      
+      // Activity breakdown
+      const tipos = e.tipos || [];
+      tipos.forEach(t => {
+        activityCount[t] = (activityCount[t] || 0) + 1;
+      });
+      if (tipos.length === 0) {
+        activityCount['Sin Tipo'] = (activityCount['Sin Tipo'] || 0) + 1;
+      }
+      
+      // Top clients
+      if (e.nombre && neta > 0) {
+        clientSales[e.nombre] = (clientSales[e.nombre] || 0) + neta;
+      }
+    });
+    
+    // Update Stats
+    document.getElementById('dashTotalVentas').textContent = `$${totalNeta.toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+    document.getElementById('dashVentasCount').textContent = `${monthEntries.length} cotización${monthEntries.length === 1 ? '' : 'es'} (${countConImporte} con importe)`;
+    
+    document.getElementById('dashTotalComision').textContent = `$${totalComision.toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+    const promComPct = totalNeta > 0 ? (totalComision / totalNeta) * 100 : 0;
+    document.getElementById('dashPromedioComision').textContent = `Tasa prom: ${promComPct.toFixed(1)}%`;
+    
+    document.getElementById('dashImporteBruto').textContent = `$${totalBruto.toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+    document.getElementById('dashTotalDescuentos').textContent = `$${totalDescuentoMonto.toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+    const promDescPct = countConImporte > 0 ? (sumaDescuentosPct / countConImporte) : 0;
+    document.getElementById('dashPromedioDescuento').textContent = `Promedio: ${promDescPct.toFixed(1)}%`;
+    
+    // Activity Breakdown UI
+    const activityDiv = document.getElementById('dashActivityBreakdown');
+    const totalActivities = Object.values(activityCount).reduce((a, b) => a + b, 0) || 1;
+    if (Object.keys(activityCount).length === 0) {
+      activityDiv.innerHTML = '<div style="font-size: 13px; color: var(--muted); text-align: center; padding: 10px;">Sin datos de actividad</div>';
+    } else {
+      activityDiv.innerHTML = Object.entries(activityCount)
+        .sort((a, b) => b[1] - a[1])
+        .map(([name, val]) => {
+          const pct = ((val / totalActivities) * 100).toFixed(0);
+          return `
+            <div style="font-size: 13px; margin-bottom: 6px;">
+              <div style="display: flex; justify-content: space-between; margin-bottom: 3px;">
+                <span style="font-weight: 600;">${name}</span>
+                <span style="color: var(--muted); font-weight: 500;">${val} (${pct}%)</span>
+              </div>
+              <div style="background: var(--surface); height: 8px; border-radius: 4px; overflow: hidden;">
+                <div style="background: var(--red); width: ${pct}%; height: 100%; border-radius: 4px;"></div>
+              </div>
+            </div>`;
+        }).join('');
+    }
+    
+    // Top Clients UI
+    const clientsDiv = document.getElementById('dashTopClients');
+    const filteredClients = Object.entries(clientSales).filter(([_, val]) => val > 0);
+    if (filteredClients.length === 0) {
+      clientsDiv.innerHTML = '<div style="font-size: 13px; color: var(--muted); text-align: center; padding: 10px;">Sin ventas registradas este mes</div>';
+    } else {
+      clientsDiv.innerHTML = filteredClients
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(([name, val], idx) => {
+          return `
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: var(--surface); border-radius: 8px; font-size: 13px;">
+              <span style="font-weight: 600; display: flex; align-items: center; gap: 6px;">
+                <span style="display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; background: ${idx === 0 ? '#ffd700' : idx === 1 ? '#c0c0c0' : idx === 2 ? '#cd7f32' : 'var(--border)'}; color: ${idx < 3 ? '#000' : 'var(--muted)'}; border-radius: 50%; font-size: 11px; font-weight: 700;">${idx + 1}</span>
+                ${name}
+              </span>
+              <span style="font-weight: 700; color: var(--dark);">$${val.toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+            </div>`;
+        }).join('');
+    }
+  } catch (err) {
+    console.error('Error al cargar datos del dashboard', err);
+  }
 }
 
 async function exportExcel() {
