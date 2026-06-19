@@ -390,6 +390,81 @@ function updateCount() {
   document.getElementById('exportBtn').disabled = entries.length === 0;
 }
 
+let editingEntryId = null;
+
+function toggleEditVenta(id) {
+  editingEntryId = id;
+  renderList();
+  if (id !== null) {
+    calcularComisionEdicion(id);
+  }
+}
+
+function calcularComisionEdicion(id) {
+  const impEl = document.getElementById(`editImporte_${id}`);
+  const descEl = document.getElementById(`editDescuento_${id}`);
+  const lblComEl = document.getElementById(`lblEditComision_${id}`);
+  if (!impEl || !descEl || !lblComEl) return;
+  
+  const importe = parseFloat(impEl.value) || 0;
+  let descuento = parseFloat(descEl.value) || 0;
+  
+  if (descuento < 0) {
+    descuento = 0;
+    descEl.value = 0;
+  } else if (descuento > 15) {
+    descuento = 15;
+    descEl.value = 15;
+  }
+  
+  let tasa = 0;
+  if (descuento >= 0 && descuento <= 5) {
+    tasa = 3.0;
+  } else if (descuento > 5 && descuento <= 10) {
+    tasa = 2.5;
+  } else if (descuento > 10 && descuento <= 15) {
+    tasa = 1.5;
+  }
+  
+  const ventaNeta = importe * (1 - descuento / 100.0);
+  const comision = ventaNeta * (tasa / 100.0);
+  
+  lblComEl.textContent = `$${comision.toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})} (${tasa.toFixed(1)}% tasa)`;
+}
+
+async function guardarVentaEdicion(id) {
+  const impVal = parseFloat(document.getElementById(`editImporte_${id}`).value) || 0;
+  const descVal = parseFloat(document.getElementById(`editDescuento_${id}`).value) || 0;
+  
+  try {
+    const res = await fetch(`/entrada/${id}`, {
+      method: 'PUT',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({importe: impVal, descuento: descVal})
+    });
+    if (!res.ok) throw new Error();
+    
+    // Update local list
+    const entry = entries.find(e => e.id === id);
+    if (entry) {
+      entry.importe = impVal;
+      entry.descuento = descVal;
+      
+      let tasa = 0;
+      if (descVal >= 0 && descVal <= 5) tasa = 0.03;
+      else if (descVal > 5 && descVal <= 10) tasa = 0.025;
+      else if (descVal > 10 && descVal <= 15) tasa = 0.015;
+      
+      entry.comision = entry.importe * (1 - entry.descuento / 100.0) * tasa;
+    }
+    
+    toggleEditVenta(null);
+    showToast('✅ Datos de venta actualizados');
+  } catch {
+    showToast('❌ Error al actualizar datos');
+  }
+}
+
 function renderList() {
   const c = document.getElementById('entriesList');
   if (!entries.length) {
@@ -402,6 +477,8 @@ function renderList() {
     const com = parseFloat(e.comision) || 0;
     const ventaNeta = imp * (1 - desc / 100.0);
     
+    const isEditing = e.id === editingEntryId;
+    
     return `
       <div class="entry-card">
         <button class="entry-delete" onclick="deleteEntry(${e.id})">✕</button>
@@ -412,12 +489,45 @@ function renderList() {
           ${e.nombreObra  ? ' · 🏗️ '+e.nombreObra  : ''}
           ${e.telefono    ? '<br>📞 '+e.telefono    : ''}
           ${e.ubicacion   ? ' · 📍 '+e.ubicacion   : ''}
-          ${imp > 0 ? `<br><div style="margin-top: 6px; padding: 6px 8px; background: var(--surface); border-radius: 6px; display: inline-block; font-size: 11.5px; border: 1px solid var(--border);">
-            <b>Importe:</b> $${imp.toLocaleString('es-MX', {minimumFractionDigits:2})} · 
-            <b>Desc:</b> ${desc}% ($${(imp - ventaNeta).toLocaleString('es-MX', {minimumFractionDigits:2})})<br>
-            <b>Neto:</b> $${ventaNeta.toLocaleString('es-MX', {minimumFractionDigits:2})} · 
-            <b>Comisión:</b> <span style="color:#1a7a1a; font-weight:bold;">$${com.toLocaleString('es-MX', {minimumFractionDigits:2})}</span>
-          </div>` : ''}
+          
+          ${isEditing ? `
+            <div class="edit-sales-form" style="margin-top: 10px; padding: 12px; background: var(--surface); border-radius: 8px; border: 1px solid var(--border);">
+              <div style="font-weight: bold; font-size: 11px; margin-bottom: 8px; color: var(--red); text-transform: uppercase; letter-spacing: 0.5px;">✏️ Registrar / Modificar Venta</div>
+              <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+                <div style="flex: 1;">
+                  <label style="font-size: 9px; font-weight:600; color:var(--muted); text-transform:uppercase; display:block; margin-bottom: 2px;">Importe ($)</label>
+                  <input type="number" id="editImporte_${e.id}" step="0.01" min="0" value="${imp || ''}" placeholder="0.00" style="width:100%; padding: 6px 8px; font-size: 13px; border: 1.5px solid var(--border); border-radius: 6px; background:#fff;" oninput="calcularComisionEdicion(${e.id})"/>
+                </div>
+                <div style="flex: 1;">
+                  <label style="font-size: 9px; font-weight:600; color:var(--muted); text-transform:uppercase; display:block; margin-bottom: 2px;">Descuento (%)</label>
+                  <input type="number" id="editDescuento_${e.id}" min="0" max="15" step="0.1" value="${desc || '0'}" placeholder="0 - 15%" style="width:100%; padding: 6px 8px; font-size: 13px; border: 1.5px solid var(--border); border-radius: 6px; background:#fff;" oninput="calcularComisionEdicion(${e.id})"/>
+                </div>
+              </div>
+              <div style="font-size: 11px; color: var(--muted); margin-bottom: 10px;">
+                Comisión: <b id="lblEditComision_${e.id}" style="color: #1a7a1a;">$0.00</b>
+              </div>
+              <div style="display: flex; gap: 6px;">
+                <button onclick="guardarVentaEdicion(${e.id})" style="flex: 1; padding: 6px; background: var(--dark); color: #fff; border: none; border-radius: 6px; font-size: 11px; font-weight: 600; cursor: pointer;">Guardar</button>
+                <button onclick="toggleEditVenta(null)" style="padding: 6px 12px; background: var(--border); color: var(--dark); border: none; border-radius: 6px; font-size: 11px; font-weight: 600; cursor: pointer;">Cancelar</button>
+              </div>
+            </div>
+          ` : `
+            ${imp > 0 ? `
+              <br><div style="margin-top: 6px; padding: 6px 8px; background: var(--surface); border-radius: 6px; display: inline-block; font-size: 11.5px; border: 1px solid var(--border);">
+                <b>Importe:</b> $${imp.toLocaleString('es-MX', {minimumFractionDigits:2})} · 
+                <b>Desc:</b> ${desc}% ($${(imp - ventaNeta).toLocaleString('es-MX', {minimumFractionDigits:2})})<br>
+                <b>Neto:</b> $${ventaNeta.toLocaleString('es-MX', {minimumFractionDigits:2})} · 
+                <b>Comisión:</b> <span style="color:#1a7a1a; font-weight:bold;">$${com.toLocaleString('es-MX', {minimumFractionDigits:2})}</span>
+              </div>
+              <div style="margin-top: 6px;">
+                <button onclick="toggleEditVenta(${e.id})" style="background: none; border: 1.5px solid var(--border); border-radius: 6px; padding: 3px 6px; font-size: 10px; font-weight: 600; cursor: pointer; color: var(--muted);">✏️ Modificar Venta</button>
+              </div>
+            ` : `
+              <div style="margin-top: 6px;">
+                <button onclick="toggleEditVenta(${e.id})" style="background: none; border: 1.5px solid var(--red); border-radius: 6px; padding: 4px 8px; font-size: 10.5px; font-weight: 600; cursor: pointer; color: var(--red);">💰 Registrar Venta</button>
+              </div>
+            `}
+          `}
         </div>
         <div class="entry-tags">
           ${e.tipos.map(t=>`<span class="tag tag-tipo">${t}</span>`).join('')}

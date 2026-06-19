@@ -292,6 +292,35 @@ def delete_entrada(entry_id):
         conn.commit()
     return jsonify({'ok': True})
 
+@app.route('/entrada/<int:entry_id>', methods=['PUT'])
+def update_entrada_venta(entry_id):
+    e = request.get_json()
+    importe = float(e.get('importe') or 0)
+    descuento = float(e.get('descuento') or 0)
+    
+    # Calculate commission based on discount percentage
+    if 0 <= descuento <= 5:
+        tasa_comision = 0.03
+    elif 5 < descuento <= 10:
+        tasa_comision = 0.025
+    elif 10 < descuento <= 15:
+        tasa_comision = 0.015
+    else:
+        tasa_comision = 0.0
+        
+    venta_total = importe * (1 - descuento / 100.0)
+    comision = venta_total * tasa_comision
+
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                UPDATE entradas
+                SET importe = %s, descuento = %s, comision = %s
+                WHERE id = %s
+            """, (importe, descuento, comision, entry_id))
+        conn.commit()
+    return jsonify({'ok': True})
+
 @app.route('/export', methods=['POST'])
 def export():
     data = request.get_json()
