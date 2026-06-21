@@ -290,7 +290,7 @@ function calcularComision() {
   }
   
   const ventaNeta = importeVal * (1 - descuentoVal / 100.0);
-  const comision = ventaNeta * (tasa / 100.0);
+  const comision = importeVal * (tasa / 100.0);
   
   document.getElementById('lblVentaNeta').textContent = `$${ventaNeta.toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
   document.getElementById('lblTasaComision').textContent = `${tasa.toFixed(1)}%`;
@@ -427,7 +427,7 @@ function calcularComisionEdicion(id) {
   }
   
   const ventaNeta = importe * (1 - descuento / 100.0);
-  const comision = ventaNeta * (tasa / 100.0);
+  const comision = importe * (tasa / 100.0);
   
   lblComEl.textContent = `$${comision.toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})} (${tasa.toFixed(1)}% tasa)`;
 }
@@ -455,7 +455,7 @@ async function guardarVentaEdicion(id) {
       else if (descVal > 5 && descVal <= 10) tasa = 0.025;
       else if (descVal > 10 && descVal <= 15) tasa = 0.015;
       
-      entry.comision = entry.importe * (1 - entry.descuento / 100.0) * tasa;
+      entry.comision = entry.importe * tasa;
     }
     
     toggleEditVenta(null);
@@ -607,7 +607,7 @@ async function loadDashboardData() {
     document.getElementById('dashVentasCount').textContent = `${monthEntries.length} cotización${monthEntries.length === 1 ? '' : 'es'} (${countConImporte} con importe)`;
     
     document.getElementById('dashTotalComision').textContent = `$${totalComision.toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
-    const promComPct = totalNeta > 0 ? (totalComision / totalNeta) * 100 : 0;
+    const promComPct = totalBruto > 0 ? (totalComision / totalBruto) * 100 : 0;
     document.getElementById('dashPromedioComision').textContent = `Tasa prom: ${promComPct.toFixed(1)}%`;
     
     document.getElementById('dashImporteBruto').textContent = `$${totalBruto.toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;

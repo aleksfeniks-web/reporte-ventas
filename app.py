@@ -226,7 +226,7 @@ def save_entrada():
         tasa_comision = 0.0
         
     venta_total = importe * (1 - descuento / 100.0)
-    comision = venta_total * tasa_comision
+    comision = importe * tasa_comision
 
     with get_conn() as conn:
         with conn.cursor() as cur:
@@ -309,7 +309,7 @@ def update_entrada_venta(entry_id):
         tasa_comision = 0.0
         
     venta_total = importe * (1 - descuento / 100.0)
-    comision = venta_total * tasa_comision
+    comision = importe * tasa_comision
 
     with get_conn() as conn:
         with conn.cursor() as cur:
